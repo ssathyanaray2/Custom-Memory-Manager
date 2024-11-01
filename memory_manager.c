@@ -71,7 +71,7 @@ void mem_mngr_init(void)
         return; 
     }
 
-    new_batch->batch_mem = malloc((MEM_BATCH_SLOT_COUNT/8) * mem_pool->slot_size);
+    new_batch->batch_mem = malloc(MEM_BATCH_SLOT_COUNT * mem_pool->slot_size);
     if (new_batch->batch_mem == NULL) {
         fprintf(stderr, "Failed to allocate memory for the batch memory.\n");
         free(new_batch); 
@@ -84,9 +84,9 @@ void mem_mngr_init(void)
     mem_pool->first_batch = new_batch;
     mem_pool->next_list = NULL;
 
-    // for (int i = 0; i < MEM_BATCH_SLOT_COUNT; i++) {
-    //     bitmap_set_bit(mem_pool->free_slots_bitmap, mem_pool->bitmap_size, i);
-    // }
+    for (int i = 0; i < MEM_BATCH_SLOT_COUNT; i++) {
+        bitmap_set_bit(mem_pool->free_slots_bitmap, mem_pool->bitmap_size, i);
+    }
 }
 
 /*
@@ -122,6 +122,11 @@ void mem_mngr_leave(void)
  */
 void * mem_mngr_alloc(size_t size)
 {
+    if(size > MEM_ALIGNMENT_BOUNDARY*5){
+        printf("allocation greater than 5 times the allignment size is not supported.\n");
+        return NULL;
+    }
+
 	STRU_MEM_LIST *current_list = mem_pool;
     STRU_MEM_LIST *prev_list = mem_pool;
 
@@ -150,6 +155,10 @@ void * mem_mngr_alloc(size_t size)
             return NULL; 
         }
 
+        for (int i = 0; i < MEM_BATCH_SLOT_COUNT; i++) {
+            bitmap_set_bit(current_list->free_slots_bitmap, current_list->bitmap_size, i);
+        }
+
         STRU_MEM_BATCH *new_batch = (STRU_MEM_BATCH *)malloc(sizeof(STRU_MEM_BATCH));
         if (new_batch == NULL) {
             fprintf(stderr, "Failed to allocate memory for the first batch.\n");
@@ -158,7 +167,7 @@ void * mem_mngr_alloc(size_t size)
             return NULL; 
         }
 
-        new_batch->batch_mem = malloc((MEM_BATCH_SLOT_COUNT/8) * current_list->slot_size);
+        new_batch->batch_mem = malloc(MEM_BATCH_SLOT_COUNT * current_list->slot_size);
         if (new_batch->batch_mem == NULL) {
             fprintf(stderr, "Failed to allocate memory for the batch memory.\n");
             free(new_batch); 
@@ -171,40 +180,31 @@ void * mem_mngr_alloc(size_t size)
         current_list->first_batch = new_batch;
         prev_list->next_list = current_list;
 
-        // for (int i = 0; i < (MEM_BATCH_SLOT_COUNT/8); i++) {
-        //     bitmap_set_bit(current_list->free_slots_bitmap, current_list->bitmap_size, i);
-        // }
-
-        bitmap_set_bit(current_list->free_slots_bitmap, current_list->bitmap_size, 0);
+        bitmap_clear_bit(current_list->free_slots_bitmap, current_list->bitmap_size, 0);
 
         void *allocated_memory = (void *)((unsigned char *)current_list->first_batch->batch_mem);
         return allocated_memory;
  
     }
 
+    //when a batch with required slot number already exsits.
     else{
-
+        
         STRU_MEM_BATCH *batch = current_list->first_batch;
         STRU_MEM_BATCH *prev_batch = current_list->first_batch;
-        int free_slot_pos = -1;
-
+        int free_slot_pos = bitmap_find_first_bit(current_list->free_slots_bitmap, current_list->bitmap_size, 1);
 
         while (batch) {
-                free_slot_pos = bitmap_find_first_bit(current_list->free_slots_bitmap, current_list->bitmap_size, 0);
-                if (free_slot_pos == -2) {
-                    fprintf(stderr, "bitmap operator error.\n");
-                    return NULL;
-                }
-                else if (free_slot_pos != -1){
-                    break;
-                }
-                prev_batch = batch;
-                batch = batch->next_batch;
+
+            prev_batch = batch;
+            batch = batch->next_batch;
+
         }
 
         // printf("current_list %d\n", free_slot_pos);
         // bitmap_print_bitmap(current_list->free_slots_bitmap, current_list->bitmap_size);
 
+        //when all the slots are occupied.
         if (free_slot_pos == -1){
 
             batch = (STRU_MEM_BATCH *)malloc(sizeof(STRU_MEM_BATCH));
@@ -213,7 +213,7 @@ void * mem_mngr_alloc(size_t size)
                 return NULL;
             }
 
-            batch->batch_mem = malloc(SLOT_ALLINED_SIZE(size) * (MEM_BATCH_SLOT_COUNT/8));
+            batch->batch_mem = malloc(SLOT_ALLINED_SIZE(size) * MEM_BATCH_SLOT_COUNT);
             if (!batch->batch_mem) {
                 free(batch);
                 return NULL; 
@@ -221,27 +221,54 @@ void * mem_mngr_alloc(size_t size)
 
             prev_batch->next_batch = batch;
             batch->next_batch = NULL;
-            // batch->next_batch = current_list->first_batch;
-            // current_list->first_batch = batch;
             current_list->batch_count++;
 
+            int old_bitmap_size = current_list->bitmap_size;
             int new_bitmap_size = current_list->batch_count * (MEM_BATCH_SLOT_COUNT/8);
             unsigned char *new_bitmap = (unsigned char *)realloc(current_list->free_slots_bitmap, new_bitmap_size);
 
-            // memset(new_bitmap + current_list->bitmap_size, 0, new_bitmap_size - current_list->bitmap_size);
-            for (int i = current_list->bitmap_size; i < new_bitmap_size; i++) {
-                bitmap_set_bit(new_bitmap, new_bitmap_size, i);
-            }
+            // bitmap_print_bitmap(current_list->free_slots_bitmap, current_list->bitmap_size);
+
             current_list->free_slots_bitmap = new_bitmap;
             current_list->bitmap_size = new_bitmap_size;
 
+            // bitmap_print_bitmap(current_list->free_slots_bitmap, current_list->bitmap_size);
+            // printf("%d\n", MEM_BATCH_SLOT_COUNT*old_bitmap_size);
+            // printf("%d\n", MEM_BATCH_SLOT_COUNT*new_bitmap_size);
 
-            free_slot_pos = bitmap_find_first_bit(current_list->free_slots_bitmap, current_list->bitmap_size, 0);
+            for (int i = old_bitmap_size*8; i < new_bitmap_size*8; i++) {
+                // bitmap_print_bitmap(current_list->free_slots_bitmap, current_list->bitmap_size);
+                bitmap_set_bit(current_list->free_slots_bitmap, current_list->bitmap_size, i);
+            }
+
+            // bitmap_print_bitmap(current_list->free_slots_bitmap, current_list->bitmap_size);
+
+
+            free_slot_pos = bitmap_find_first_bit(current_list->free_slots_bitmap, current_list->bitmap_size, 1);
+            // printf("free slot %d\n", free_slot_pos);
 
         }
 
-        bitmap_set_bit(current_list->free_slots_bitmap, current_list->bitmap_size, free_slot_pos);
-        void *allocated_memory = (void *)((unsigned char *)current_list->first_batch->batch_mem + free_slot_pos * SLOT_ALLINED_SIZE(size));
+        int batch_number = free_slot_pos/MEM_BATCH_SLOT_COUNT;
+        int offset = free_slot_pos%MEM_BATCH_SLOT_COUNT;
+        batch = current_list->first_batch;
+
+        // printf("free slot %d\n", free_slot_pos);
+        // printf("batch_number %d\n", batch_number);
+        // printf("offset %d\n", offset);
+
+        int batch_count=0;
+        while(batch_count<batch_number){
+            batch=batch->next_batch;
+            batch_count += 1;
+        }
+
+        // printf("batch number %d batch address %p\n", batch_count, batch->batch_mem);
+        // printf("batch number %d last batch address %p\n",batch_count, batch->batch_mem + current_list->slot_size * MEM_BATCH_SLOT_COUNT);
+
+        bitmap_clear_bit(current_list->free_slots_bitmap, current_list->bitmap_size, free_slot_pos);
+        void *allocated_memory = (void *)((unsigned char *)batch->batch_mem + offset * SLOT_ALLINED_SIZE(size));
+        // printf("allocated address %p\n", allocated_memory);
         return allocated_memory;
     }
 
@@ -255,6 +282,7 @@ void * mem_mngr_alloc(size_t size)
  */
 void mem_mngr_free(void * ptr)
 {
+    // printf("free memory address %p\n", ptr);
 	if (!ptr) {
         printf("Error: NULL pointer provided.\n");
         return;
@@ -265,10 +293,16 @@ void mem_mngr_free(void * ptr)
     while(current_list) {
 
         STRU_MEM_BATCH *batch = current_list->first_batch;
+        int batch_count = 0;
 
         while (batch) {
-            
-            if (ptr >= batch->batch_mem && ptr < (void *)((unsigned char *)batch->batch_mem + current_list->slot_size * (MEM_BATCH_SLOT_COUNT/8))) {
+
+            // printf("batch_mem %p\n", batch->batch_mem);
+            // printf("last batch_mem %p\n", batch->batch_mem + current_list->slot_size * MEM_BATCH_SLOT_COUNT);
+            // printf("pointer %p\n", ptr);
+
+            if (ptr >= batch->batch_mem && ptr < (void *)((unsigned char *)batch->batch_mem + current_list->slot_size * MEM_BATCH_SLOT_COUNT)) {
+
                 size_t offset = (unsigned char *)ptr - (unsigned char *)batch->batch_mem;
                 
                 if (offset % current_list->slot_size != 0) {
@@ -279,16 +313,22 @@ void mem_mngr_free(void * ptr)
 
                 int slot_index = offset / current_list->slot_size;
 
-                if (bitmap_bit_is_set(current_list->free_slots_bitmap, current_list->bitmap_size, slot_index) == 0) {
+                // printf("slot size %d\n", current_list->slot_size);
+                // printf("batch count %d\n", batch_count);
+                // printf("offset %d\n", slot_index);
+                // printf("free memory address %p\n", ptr);
+
+                if (bitmap_bit_is_set(current_list->free_slots_bitmap, current_list->bitmap_size, slot_index) == 1) {
                     printf("Error: Double free detected.\n");
                     return;
                 }
 
-                bitmap_clear_bit(current_list->free_slots_bitmap, current_list->bitmap_size, slot_index);
+                bitmap_set_bit(current_list->free_slots_bitmap, current_list->bitmap_size, batch_count*MEM_BATCH_SLOT_COUNT + slot_index);
                 return;
             }
 
             batch = batch->next_batch;
+            batch_count +=1;
         }
 
         current_list = current_list->next_list;

@@ -1,0 +1,87 @@
+Name : Spoorthi Sathya Narayana Murthy
+B-Number : 01027694
+
+I have fully completed the project and have test all possible testcases to my knowledge.
+
+===============================================Instruction to run the project===============================================
+
+    Go to the project directory:
+    cd proj_1_base
+
+    Command to compile the code:
+    make
+
+    Run the code: (replace test_main with the test file)
+    gcc test_main.c memory_manager.a -o test_main && ./test_main
+
+    clean:
+    make clean
+
+===============================================Logs===============================================
+I have pasted one log example for reference. 
+
+Test code:
+int main(int argc, char * argv[])
+{
+    mem_mngr_init();
+
+    mem_mngr_print_snapshot();
+    void *ptr, *ptro;
+    for(int i=0; i<16; i++){
+        ptr= mem_mngr_alloc(12);
+    }
+    ptro = mem_mngr_alloc(15);
+    ptr = mem_mngr_alloc(32);
+    mem_mngr_print_snapshot();
+
+    mem_mngr_free(ptr);
+    mem_mngr_print_snapshot();
+    mem_mngr_free(ptro);
+
+    mem_mngr_print_snapshot();
+    mem_mngr_leave();
+
+    return 0;
+}
+
+Output:
+spoorthisanjay@Spoorthis-Air proj_1_base % make 
+gcc -Wall -Werror -g -c memory_manager.c -o memory_manager.o
+gcc -Wall -Werror -g -c bitmap.c -o bitmap.o
+ar rcs memory_manager.a memory_manager.o bitmap.o
+spoorthisanjay@Spoorthis-Air proj_1_base % gcc test_main.c memory_manager.a -o test_main && ./test_main
+============== Memory snapshot ===============
+mem_list 0x137605d80 slot_size 16 batch_count 1 free_slot_bitmap 0x137605e20
+bitmap 0x137605e20 size 1 bytes: 1111  1111  
+         mem_batch 0x137605fe0 batch_mem 0x137605c40
+==============================================
+============== Memory snapshot ===============
+mem_list 0x137605d80 slot_size 16 batch_count 3 free_slot_bitmap 0x137605e20
+bitmap 0x137605e20 size 3 bytes: 0000  0000  0000  0000  0111  1111  
+         mem_batch 0x137605fe0 batch_mem 0x137605c40
+         mem_batch 0x137605ff0 batch_mem 0x137605cc0
+         mem_batch 0x137605d40 batch_mem 0x137606000
+mem_list 0x137605d50 slot_size 32 batch_count 1 free_slot_bitmap 0x137605f40
+bitmap 0x137605f40 size 1 bytes: 0111  1111  
+         mem_batch 0x137605f50 batch_mem 0x137606080
+==============================================
+============== Memory snapshot ===============
+mem_list 0x137605d80 slot_size 16 batch_count 3 free_slot_bitmap 0x137605e20
+bitmap 0x137605e20 size 3 bytes: 0000  0000  0000  0000  0111  1111  
+         mem_batch 0x137605fe0 batch_mem 0x137605c40
+         mem_batch 0x137605ff0 batch_mem 0x137605cc0
+         mem_batch 0x137605d40 batch_mem 0x137606000
+mem_list 0x137605d50 slot_size 32 batch_count 1 free_slot_bitmap 0x137605f40
+bitmap 0x137605f40 size 1 bytes: 1111  1111  
+         mem_batch 0x137605f50 batch_mem 0x137606080
+==============================================
+============== Memory snapshot ===============
+mem_list 0x137605d80 slot_size 16 batch_count 3 free_slot_bitmap 0x137605e20
+bitmap 0x137605e20 size 3 bytes: 0000  0000  0000  0000  1111  1111  
+         mem_batch 0x137605fe0 batch_mem 0x137605c40
+         mem_batch 0x137605ff0 batch_mem 0x137605cc0
+         mem_batch 0x137605d40 batch_mem 0x137606000
+mem_list 0x137605d50 slot_size 32 batch_count 1 free_slot_bitmap 0x137605f40
+bitmap 0x137605f40 size 1 bytes: 1111  1111  
+         mem_batch 0x137605f50 batch_mem 0x137606080
+==============================================

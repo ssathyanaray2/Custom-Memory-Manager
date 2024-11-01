@@ -49,6 +49,9 @@ int bitmap_find_first_bit(unsigned char * bitmap, int size, int val)
  */
 int bitmap_set_bit(unsigned char * bitmap, int size, int target_pos)
 {
+    // printf("bitmap %p\n", bitmap);
+    // printf("size %d\n", size);
+    // printf("target %d\n", target_pos);
     if (bitmap == NULL || size <= 0 || target_pos < 0 || target_pos >= size * 8) {
         return BITMAP_OP_ERROR;  
     }
